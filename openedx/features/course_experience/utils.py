@@ -81,7 +81,7 @@ def get_course_outline_block_tree(request, course_id, user=None):
         """
         block_key = block.serializer.instance
 
-        if course_block_completions.get(block_key):
+        if course_block_completions.get(block_key) == 1.0:
             block['complete'] = True
             if block_key == latest_completion.full_block_key:
                 block['resume_block'] = True

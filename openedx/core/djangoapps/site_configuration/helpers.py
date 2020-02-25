@@ -5,6 +5,8 @@ Helpers methods for site configuration.
 
 from django.conf import settings
 
+from openedx.core.lib.cache_utils import request_cached
+
 
 def get_current_site_configuration():
     """
@@ -148,6 +150,43 @@ def get_dict(name, default=None):
         return get_configuration_dict(name, default)
     else:
         return default.copy()
+
+
+@request_cached
+def get_site_for_org(org):
+    # Imports are placed here to avoid model import at project startup.
+    import crum
+    from django.contrib.sites.models import Site
+    from django.contrib.sites.requests import RequestSite
+    from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
+
+    configuration = SiteConfiguration.get_configuration_for_org(org, select_related=['site'])
+    if configuration is None:
+        try:
+            return Site.objects.get(id=settings.SITE_ID)
+        except Site.DoesNotExist:
+            return RequestSite(crum.get_current_request())
+    else:
+        return configuration.site
+
+
+# FIXME @request_cached
+def get_site_for_org(org):
+    # Imports are placed here to avoid model import at project startup.
+    import crum
+    from django.contrib.sites.models import Site
+    from django.contrib.sites.requests import RequestSite
+    from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
+
+    configuration = SiteConfiguration.get_configuration_for_org(org, select_related=['site'])
+    print('MIKE conf:', configuration)
+    if configuration is None:
+        try:
+            return Site.objects.get(id=settings.SITE_ID)
+        except Site.DoesNotExist:
+            return RequestSite(crum.get_current_request())
+    else:
+        return configuration.site
 
 
 def has_override_value(name):

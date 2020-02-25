@@ -19,7 +19,7 @@ class TestCalendarSyncInit(TestCase):
         block_key = 'block-v1:Org+Number+Term+type@sequential+block@gibberish'
         date_type = 'due'
         event_id = get_calendar_event_id(self.user, block_key, date_type)
-        expected = '{username}.{block_key}.{date_type}'.format(
-            username=self.user.username, block_key=block_key, date_type=date_type
+        expected = '{user_id}.{block_key}.{date_type}'.format(
+            user_id=self.user.id, block_key=block_key, date_type=date_type
         )
         self.assertEqual(event_id, expected)

@@ -70,11 +70,13 @@ def request_cached(namespace=None, arg_map_function=None, request_cache_getter=N
 
         if request_cache:
             cache_key = _func_call_cache_key(wrapped, arg_map_function, *args, **kwargs)
+            print('MIKE key:', cache_key)
             cached_response = request_cache.get_cached_response(cache_key)
             if cached_response.is_found:
                 return cached_response.value
 
         result = wrapped(*args, **kwargs)
+        print('MIKE result:', result)
 
         if request_cache:
             request_cache.set(cache_key, result)

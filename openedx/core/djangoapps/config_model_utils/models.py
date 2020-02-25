@@ -21,8 +21,8 @@ from django.db.models import Q
 from django.utils.translation import ugettext_lazy as _
 
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from openedx.core.djangoapps.site_configuration.helpers import get_site_for_org
 from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
-from openedx.core.lib.cache_utils import request_cached
 
 
 class Provenance(Enum):
@@ -173,7 +173,7 @@ class StackedConfigurationModel(ConfigurationModel):
             org = cls._org_from_org_course(org_course)
 
         if site is None and org is not None:
-            site = cls._site_from_org(org)
+            site = get_site_for_org(org)
 
         stackable_fields = [cls._meta.get_field(field_name) for field_name in cls.STACKABLE_FIELDS]
         field_defaults = {
@@ -322,19 +322,6 @@ class StackedConfigurationModel(ConfigurationModel):
     @classmethod
     def _org_course_from_course_key(cls, course_key):
         return u"{}+{}".format(course_key.org, course_key.course)
-
-    @classmethod
-    @request_cached()
-    def _site_from_org(cls, org):
-
-        configuration = SiteConfiguration.get_configuration_for_org(org, select_related=['site'])
-        if configuration is None:
-            try:
-                return Site.objects.get(id=settings.SITE_ID)
-            except Site.DoesNotExist:
-                return RequestSite(crum.get_current_request())
-        else:
-            return configuration.site
 
     def clean(self):
         # fail validation if more than one of site/org/course are specified simultaneously

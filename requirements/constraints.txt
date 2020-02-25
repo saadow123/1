@@ -8,14 +8,22 @@
 # pin when possible.  Writing an issue against the offending project and
 # linking to it here is good.
 
+# These dropped support for Django 1.11
+django-oauth-toolkit<1.2
+django-model-utils<4
+mysqlclient<1.5
+
+# These dropped support for Python 3.5
+drf-yasg<1.17.1
+inflect<4
+jsonfield2<3.1
+matplotlib<3.1
+mock<4
+path<13.2
+zipp<2
+
 # The CORS_ORIGIN_WHITELIST changes in a backwards incompatible way in 3.0.0, needs matching configuration repo changes
 django-cors-headers<3.0.0
-
-# Version 1.2.0 dropped support for Django 1.11
-django-oauth-toolkit<1.2.0
-
-# Version 4.0.0 dropped support for Django < 2.0.1
-django-model-utils<4.0.0
 
 # 1.2.3 breaks unittest in
 # lms.djangoapps.course_api.tests.test_views.CourseListSearchViewTest.test_list_all_with_search_term
@@ -28,17 +36,8 @@ factory-boy==2.8.1
 # Version 0.3.13 broke the timing returned by python3-saml OneLogin_Saml2_Utils.now()
 freezegun==0.3.12
 
-# 4.0.0 dropped support for Python 3.5
-inflect<4.0.0
-
 # Convert text markup to HTML; used in capa problems, forums, and course wikis; pin Markdown version as tests failed for its upgrade to the latest release
 Markdown==2.6.11
-
-# Matplotlib 3.1 requires Python 3.6
-matplotlib<3.1
-
-# mysqlclient 1.5 is scheduled to change internal APIs used by Django 1.11
-mysqlclient<1.5
 
 # Bumping requests-oauthlib to 1.2 updates oauthlib to 3.0.0, which changes a response code in certain cases
 # This causes a test to fail. Before fixing, we would need to make sure mobile apps are functional with this change
@@ -46,11 +45,9 @@ mysqlclient<1.5
 requests-oauthlib==1.1.0
 oauthlib==2.1.0
 
-# Version 0.23.0 requires python-dateuil>=2.5.0
-pandas==0.22.0
-
-# Upgrading to 2.5.3 on 2020-01-03 triggered "'tzlocal' object has no attribute '_std_offset'" errors in production
-python-dateutil==2.4.0
+# python-dateutil 2.5.3 on 2020-01-03 triggered "'tzlocal' object has no attribute '_std_offset'" errors in production
+python-dateutil<2.5
+pandas<0.23  # requires newer python-dateutil
 
 # python3-saml 1.6.0 breaks unittests in common/djangoapps/third_party_auth/tests/test_views.py::SAMLMetadataTest
 python3-saml==1.5.0
@@ -62,26 +59,8 @@ transifex-client==0.13.4
 # freezegun 0.3.13 is breaking a test: https://github.com/spulec/freezegun/issues/326
 freezegun==0.3.12
 
-# zipp 2.0.0 requires Python >= 3.6
-zipp==1.0.0
-
-# django-storages==1.9 breaks contentstore imports
-django-storages==1.8
-
-# mock 4+ requires Python 3.6+
-mock<4
-
-# jsonfield2 3.1.0 drops support for python 3.5
-jsonfield2<3.1.0
-
-# mock version 4.0.0 drops support for python 3.5
-mock<4.0.0
-
-# django-storages version 1.9 drops support for boto storage backend.
+# django-storages 1.9 drops support for boto storage backend and breaks contentstore imports
 django-storages<1.9
-
-# Support was dropped for Python 3.5, Django 2.0, Django 2.1, DRF 3.7
-drf-yasg<1.17.1
 
 # BOM-1324: This constraint will be removed separately once 3.0.0 is out
 edx-drf-extensions<3.0.0
