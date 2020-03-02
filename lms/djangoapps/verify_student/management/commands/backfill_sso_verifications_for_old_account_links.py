@@ -40,6 +40,6 @@ class Command(BaseCommand):
         try:
             provider = Registry.get(provider_slug)
         except ValueError as e:
-            raise CommandError('provider slug {slug} does not exist'.format('provider_slug'))
+            raise CommandError('provider slug {slug} does not exist'.format(slug='provider_slug'))
 
         
