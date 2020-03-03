@@ -156,6 +156,42 @@ class _CourseGradeReportContext(object):
         return self.task_progress.update_task_state(extra_meta={'step': message})
 
 
+class _ProblemGradeReportContext(object):
+    """
+    Internal class that provides a common context to use for a single grade
+    report.  When a report is parallelized across multiple processes,
+    elements of this context are serialized and parsed across process
+    boundaries.
+    """
+    def __init__(self, _xmodule_instance_args, _entry_id, course_id, _task_input, action_name):
+        self.task_info_string = (
+            u'Task: {task_id}, '
+            u'InstructorTask ID: {entry_id}, '
+            u'Course: {course_id}, '
+            u'Input: {task_input}'
+        ).format(
+            task_id=_xmodule_instance_args.get('task_id') if _xmodule_instance_args is not None else None,
+            entry_id=_entry_id,
+            course_id=course_id,
+            task_input=_task_input,
+        )
+        self.action_name = action_name
+        self.course_id = course_id
+        self.task_progress = TaskProgress(self.action_name, total=None, start_time=time())
+
+    @lazy
+    def course(self):
+        return get_course_by_id(self.course_id)
+
+    def update_status(self, message):
+        """
+        Updates the status on the celery task to the given message.
+        Also logs the update.
+        """
+        TASK_LOG.info(u'%s, Task type: %s, %s', self.task_info_string, self.action_name, message)
+        return self.task_progress.update_task_state(extra_meta={'step': message})
+
+
 class _CertificateBulkContext(object):
     def __init__(self, context, users):
         certificate_whitelist = CertificateWhitelist.objects.filter(course_id=context.course_id, whitelist=True)
@@ -520,79 +556,73 @@ class CourseGradeReport(object):
 
 
 class ProblemGradeReport(object):
+
     @classmethod
     def generate(cls, _xmodule_instance_args, _entry_id, course_id, _task_input, action_name):
+        """
+        Public method to generate a grade report.
+        """
+        with modulestore().bulk_operations(course_id):
+            context = _ProblemGradeReportContext(_xmodule_instance_args, _entry_id, course_id, _task_input, action_name)
+            return ProblemGradeReport()._generate(context)
+
+    @classmethod
+    def _generate(cls, context):
         """
         Generate a CSV containing all students' problem grades within a given
         `course_id`.
         """
-
-        def log_task_info(message):
-            """
-            Updates the status on the celery task to the given message.
-            Also logs the update.
-            """
-            fmt = u'Task: {task_id}, InstructorTask ID: {entry_id}, Course: {course_id}, Input: {task_input}'
-            task_info_string = fmt.format(
-                task_id=task_id, entry_id=_entry_id, course_id=course_id, task_input=_task_input
-            )
-            TASK_LOG.info(u'%s, Task type: %s, %s, %s', task_info_string, action_name, message, task_progress.state)
-
-        start_time = time()
-        start_date = datetime.now(UTC)
-        status_interval = 100
-        task_id = _xmodule_instance_args.get('task_id') if _xmodule_instance_args is not None else None
-
-        report_for_verified_only = generate_grade_report_for_verified_only()
-        enrolled_students = CourseEnrollment.objects.users_enrolled_in(
-            course_id=course_id,
-            include_inactive=True,
-            verified_only=report_for_verified_only,
-        )
-        args = [iter(enrolled_students)] * 3
-        grouped_users = zip_longest(*args, fillvalue=None)
-
-        task_progress = TaskProgress(action_name, enrolled_students.count(), start_time)
-
-        # This struct encapsulates both the display names of each static item in the
-        # header row as values as well as the django User field names of those items
-        # as the keys.  It is structured in this way to keep the values related.
+        context.update_status(u'Starting grades')
+        import pdb; pdb.set_trace();
+        course = get_course_by_id(context.course_id)
         header_row = OrderedDict([('id', 'Student ID'), ('email', 'Email'), ('username', 'Username')])
-
-        course = get_course_by_id(course_id)
-        log_task_info(u'Retrieving graded scorable blocks')
         graded_scorable_blocks = cls._graded_scorable_blocks_to_header(course)
+        success_headers = cls._success_headers(header_row, graded_scorable_blocks)
+        error_headers = cls._error_headers(header_row)
 
-        # Just generate the static fields for now.
-        rows = [
+        generated_rows = cls._batched_rows(context, header_row, graded_scorable_blocks)
+        success_rows, error_rows = zip(*generated_rows)
+        success_rows = list(chain(*success_rows))
+        error_rows = list(chain(*error_rows))
+
+        # update metrics on task status
+        context.task_progress.succeeded = len(success_rows)
+        context.task_progress.failed = len(error_rows)
+        context.task_progress.attempted = context.task_progress.succeeded + context.task_progress.failed
+        context.task_progress.total = context.task_progress.attempted
+
+        context.update_status(u'Completed grades')
+
+        date = datetime.now(UTC)
+        upload_csv_to_report_store([success_headers] + success_rows, 'grade_report', context.course_id, date)
+        if len(error_rows) > 0:
+            error_rows = [error_headers] + error_rows
+            upload_csv_to_report_store(error_rows, 'grade_report_err', context.course_id, date)
+
+        return context.update_status(u'Completed grades')
+
+    @classmethod
+    def _success_headers(cls, header_row, graded_scorable_blocks):
+        """
+        Returns headers for all gradable blocks including fixed headers
+        for report.
+        :param header_row:
+        :param graded_scorable_blocks:
+        :return:
+        """
+        return [
             list(header_row.values()) + ['Enrollment Status', 'Grade'] + _flatten(list(graded_scorable_blocks.values()))
         ]
-        error_rows = [list(header_row.values()) + ['error_msg']]
 
-        # Bulk fetch and cache enrollment states so we can efficiently determine
-        # whether each user is currently enrolled in the course.
-        log_task_info(u'Fetching enrollment status')
-        CourseEnrollment.bulk_fetch_enrollment_states(enrolled_students, course_id)
-
-        generated_rows = cls.generate_rows(grouped_users, {"course": course,
-                                                           "course_id": course_id,
-                                                           "header_row": header_row,
-                                                           "error_rows": error_rows,
-                                                           "rows": rows,
-                                                           "graded_scorable_blocks": graded_scorable_blocks,
-                                                           "task_progress": task_progress,
-                                                           })
-
-        success_rows, error_rows = zip(*generated_rows)
-        log_task_info('Uploading CSV to store')
-        # Perform the upload if any students have been successfully graded
-        if len(enrolled_students) > 1:
-            upload_csv_to_report_store(rows, 'problem_grade_report', course_id, start_date)
-        # If there are any error rows, write them out as well
-        if len(error_rows) > 1:
-            upload_csv_to_report_store(error_rows, 'problem_grade_report_err', course_id, start_date)
-
-        return task_progress.update_task_state(extra_meta={'step': 'Uploading CSV'})
+    @classmethod
+    def _error_headers(cls, header_row):
+        """
+        Returns error headers for error report.
+        :param header_row:
+        :param graded_scorable_blocks:
+        :return:
+        """
+        return [list(header_row.values()) + ['error_msg']]
 
     @classmethod
     def _graded_scorable_blocks_to_header(cls, course):
@@ -619,11 +649,13 @@ class ProblemGradeReport(object):
         return scorable_blocks_map
 
     @classmethod
-    def calculate_rows(cls, enrolled_students, course, course_id, header_row, error_rows, rows, graded_scorable_blocks,
-                       task_progress):
-        for student, course_grade, error in CourseGradeFactory().iter(enrolled_students, course):
+    def _rows_for_users(cls, context, users, header_row, graded_scorable_blocks):
+        """
+        Returns a list of rows for the given users for this report.
+        """
+        success_rows, error_rows = [], []
+        for student, course_grade, error in CourseGradeFactory().iter(users, context.course):
             student_fields = [getattr(student, field_name) for field_name in header_row]
-            task_progress.attempted += 1
 
             if not course_grade:
                 err_msg = text_type(error)
@@ -631,10 +663,9 @@ class ProblemGradeReport(object):
                 if not err_msg:
                     err_msg = u'Unknown error'
                 error_rows.append(student_fields + [err_msg])
-                task_progress.failed += 1
                 continue
 
-            enrollment_status = _user_enrollment_status(student, course_id)
+            enrollment_status = _user_enrollment_status(student, context.course_id)
 
             earned_possible_values = []
             for block_location in graded_scorable_blocks:
@@ -648,22 +679,91 @@ class ProblemGradeReport(object):
                     else:
                         earned_possible_values.append([u'Not Attempted', problem_score.possible])
 
-            rows.append(
+            success_rows.append(
                 student_fields + [enrollment_status, course_grade.percent] + _flatten(earned_possible_values))
-        return rows, error_rows
+
+        return success_rows, error_rows
 
     @classmethod
-    def generate_rows(cls, grouped_users, context):
-        for users in grouped_users:
+    def _batched_rows(cls, context, header_row, graded_scorable_blocks):
+        """
+        A generator of batches of (success_rows, error_rows) for this report.
+        """
+        for users in cls._batch_users(context):
             users = [u for u in users if u is not None]
-            yield cls.calculate_rows(users,
-                                     context["course"],
-                                     context["course_id"],
-                                     context["header_row"],
-                                     context["error_rows"],
-                                     context["rows"],
-                                     context["graded_scorable_blocks"],
-                                     context["task_progress"])
+            yield cls._rows_for_users(context, users, header_row, graded_scorable_blocks)
+
+    @classmethod
+    def _batch_users(cls, context):
+        """
+            Returns a generator of batches of users.
+        """
+
+        def grouper(iterable, chunk_size=100, fillvalue=None):
+            args = [iter(iterable)] * chunk_size
+            return zip_longest(*args, fillvalue=fillvalue)
+
+        def get_enrolled_learners_for_course(course_id, verified_only=False):
+            """
+            Get enrolled learners in a course.
+
+            Arguments:
+                course_id (CourseLocator): course_id to return enrollees for.
+                verified_only (boolean): is a boolean when True, returns only verified enrollees.
+            """
+            if optimize_get_learners_switch_enabled():
+                TASK_LOG.info(u'%s, Creating Course Grade with optimization', task_log_message)
+                return users_for_course_v2(course_id, verified_only=verified_only)
+
+            TASK_LOG.info(u'%s, Creating Course Grade without optimization', task_log_message)
+            return users_for_course(course_id, verified_only=verified_only)
+
+        def users_for_course(course_id, verified_only=False):
+            """
+            Get all the enrolled users in a course.
+
+            This method fetches & loads the enrolled user objects at once which may cause
+            out-of-memory errors in large courses. This method will be removed when
+            `OPTIMIZE_GET_LEARNERS_FOR_COURSE` waffle flag is removed.
+            """
+            users = CourseEnrollment.objects.users_enrolled_in(
+                course_id,
+                include_inactive=True,
+                verified_only=verified_only,
+            )
+            users = users.select_related('profile')
+            return grouper(users)
+
+        def users_for_course_v2(course_id, verified_only=False):
+            """
+            Get all the enrolled users in a course chunk by chunk.
+
+            This generator method fetches & loads the enrolled user objects on demand which in chunk
+            size defined. This method is a workaround to avoid out-of-memory errors.
+            """
+            filter_kwargs = {
+                'courseenrollment__course_id': course_id,
+            }
+            if verified_only:
+                filter_kwargs['courseenrollment__mode'] = CourseMode.VERIFIED
+
+            user_ids_list = get_user_model().objects.filter(**filter_kwargs).values_list('id', flat=True).order_by('id')
+            user_chunks = grouper(user_ids_list)
+            for user_ids in user_chunks:
+                user_ids = [user_id for user_id in user_ids if user_id is not None]
+                min_id = min(user_ids)
+                max_id = max(user_ids)
+                users = get_user_model().objects.filter(
+                    id__gte=min_id,
+                    id__lte=max_id,
+                    **filter_kwargs
+                ).select_related('profile')
+                yield users
+
+        course_id = context.course_id
+        task_log_message = u'{}, Task type: {}'.format(context.task_info_string, context.action_name)
+        report_for_verified_only = generate_grade_report_for_verified_only()
+        return get_enrolled_learners_for_course(course_id=course_id, verified_only=report_for_verified_only)
 
 
 class ProblemResponses(object):
