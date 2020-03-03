@@ -10,8 +10,9 @@ verification record.
 
 from django.core.management.base import BaseCommand, CommandError
 
-from third_party_auth.provider import Registry
 from common.djangoapps.third_party_auth.api.utils import get_user_social_auth_queryset_by_provider
+from lms.djangoapps.verify_student.models import SSOVerification
+from third_party_auth.provider import Registry
 
 
 class Command(BaseCommand):
@@ -44,3 +45,12 @@ class Command(BaseCommand):
             raise CommandError('provider slug {slug} does not exist'.format(slug='provider_slug'))
 
         query_set = get_user_social_auth_queryset_by_provider(provider)
+        for user_social_auth in query_set:
+            if not user_social_auth.user.ssoverification_set.exists():
+                SSOVerification.objects.create(
+                    user=user_social_auth.user,
+                    status="approved",
+                    name=user_social_auth.user.profile.name,
+                    identity_provider_type=provider.full_class_name,
+                    identity_provider_slug=provider.slug,
+                )

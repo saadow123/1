@@ -25,7 +25,8 @@ class TestBackfillSSOVerificationsCommand(TestCase):
             enabled=True,
             enable_sso_id_verification=True,
         )
-        self.user_social_auth1 = UserSocialAuthFactory(slug=self.slug)
+        self.user_social_auth1 = UserSocialAuthFactory(slug=self.slug, provider=self.provider.backend_name)
+        self.user_social_auth1.save()
         self.user1 = self.user_social_auth1.user
 
     def test_fails_without_required_param(self):
