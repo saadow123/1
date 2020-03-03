@@ -11,6 +11,7 @@ verification record.
 from django.core.management.base import BaseCommand, CommandError
 
 from third_party_auth.provider import Registry
+from common.djangoapps.third_party_auth.api.utils import get_user_social_auth_queryset_by_provider
 
 
 class Command(BaseCommand):
@@ -42,4 +43,4 @@ class Command(BaseCommand):
         except ValueError as e:
             raise CommandError('provider slug {slug} does not exist'.format(slug='provider_slug'))
 
-        
+        query_set = get_user_social_auth_queryset_by_provider(provider)
