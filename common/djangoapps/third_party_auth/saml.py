@@ -249,8 +249,8 @@ class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
 
     # Define the relationships between SAPSF record fields and Open edX logistration fields.
     default_field_mapping = {
-        'username': 'username',
-        'firstName': 'first_name',
+        'username': '',
+        'firstName': ['username', 'first_name'],
         'lastName': 'last_name',
         'defaultFullName': 'fullname',
         'email': 'email',
@@ -285,10 +285,14 @@ class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
         field_mapping = self.field_mappings
         value_defaults = self.conf.get('attr_defaults', {})
         value_defaults = {key: value_defaults.get(value, '') for key, value in self.defaults_value_mapping.items()}
-        registration_fields = {
-            edx_name: response['d'].get(odata_name, value_defaults.get(odata_name, ''))
-            for odata_name, edx_name in field_mapping.items()
-        }
+        registration_fields = {}
+        for odata_name, edx_name in field_mapping.items():
+            if isinstance(edx_name, list):
+                for value in edx_name:
+                    registration_fields[value] = response['d'].get(odata_name, value_defaults.get(odata_name, ''))
+            else:
+                registration_fields[edx_name] = response['d'].get(odata_name, value_defaults.get(odata_name, ''))
+
         value_mapping = self.value_mappings
         for field, value in registration_fields.items():
             if field in value_mapping and value in value_mapping[field]:

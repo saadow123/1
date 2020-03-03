@@ -375,7 +375,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
     # assertion metadata. Rather, they will be fetched from the mocked SAPSuccessFactors API.
     USER_EMAIL = "john@smith.com"
     USER_NAME = "John Smith"
-    USER_USERNAME = "jsmith"
+    USER_USERNAME = "John"
 
     def setUp(self):
         """
