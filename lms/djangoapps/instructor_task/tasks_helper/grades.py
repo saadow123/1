@@ -549,6 +549,9 @@ class ProblemGradeReport(object):
             include_inactive=True,
             verified_only=report_for_verified_only,
         )
+        args = [iter(enrolled_students)] * 3
+        grouped_users = zip_longest(*args, fillvalue=None)
+
         task_progress = TaskProgress(action_name, enrolled_students.count(), start_time)
 
         # This struct encapsulates both the display names of each static item in the
@@ -571,45 +574,19 @@ class ProblemGradeReport(object):
         log_task_info(u'Fetching enrollment status')
         CourseEnrollment.bulk_fetch_enrollment_states(enrolled_students, course_id)
 
-        for student, course_grade, error in CourseGradeFactory().iter(enrolled_students, course):
-            student_fields = [getattr(student, field_name) for field_name in header_row]
-            task_progress.attempted += 1
+        generated_rows = cls.generate_rows(grouped_users, {"course": course,
+                                                           "course_id": course_id,
+                                                           "header_row": header_row,
+                                                           "error_rows": error_rows,
+                                                           "rows": rows,
+                                                           "graded_scorable_blocks": graded_scorable_blocks,
+                                                           "task_progress": task_progress,
+                                                           })
 
-            if not course_grade:
-                err_msg = text_type(error)
-                # There was an error grading this student.
-                if not err_msg:
-                    err_msg = u'Unknown error'
-                error_rows.append(student_fields + [err_msg])
-                task_progress.failed += 1
-                continue
-
-            enrollment_status = _user_enrollment_status(student, course_id)
-
-            earned_possible_values = []
-            for block_location in graded_scorable_blocks:
-                try:
-                    problem_score = course_grade.problem_scores[block_location]
-                except KeyError:
-                    earned_possible_values.append([u'Not Available', u'Not Available'])
-                else:
-                    if problem_score.first_attempted:
-                        earned_possible_values.append([problem_score.earned, problem_score.possible])
-                    else:
-                        earned_possible_values.append([u'Not Attempted', problem_score.possible])
-
-            rows.append(student_fields + [enrollment_status, course_grade.percent] + _flatten(earned_possible_values))
-
-            task_progress.succeeded += 1
-            if task_progress.attempted % status_interval == 0:
-                step = u'Calculating Grades'
-                task_progress.update_task_state(extra_meta={'step': step})
-                log_message = u'{0} {1}/{2}'.format(step, task_progress.attempted, task_progress.total)
-                log_task_info(log_message)
-
+        success_rows, error_rows = zip(*generated_rows)
         log_task_info('Uploading CSV to store')
         # Perform the upload if any students have been successfully graded
-        if len(rows) > 1:
+        if len(enrolled_students) > 1:
             upload_csv_to_report_store(rows, 'problem_grade_report', course_id, start_date)
         # If there are any error rows, write them out as well
         if len(error_rows) > 1:
@@ -640,6 +617,53 @@ class ProblemGradeReport(object):
                     scorable_blocks_map[scorable_block.location] = [header_name + " (Earned)",
                                                                     header_name + " (Possible)"]
         return scorable_blocks_map
+
+    @classmethod
+    def calculate_rows(cls, enrolled_students, course, course_id, header_row, error_rows, rows, graded_scorable_blocks,
+                       task_progress):
+        for student, course_grade, error in CourseGradeFactory().iter(enrolled_students, course):
+            student_fields = [getattr(student, field_name) for field_name in header_row]
+            task_progress.attempted += 1
+
+            if not course_grade:
+                err_msg = text_type(error)
+                # There was an error grading this student.
+                if not err_msg:
+                    err_msg = u'Unknown error'
+                error_rows.append(student_fields + [err_msg])
+                task_progress.failed += 1
+                continue
+
+            enrollment_status = _user_enrollment_status(student, course_id)
+
+            earned_possible_values = []
+            for block_location in graded_scorable_blocks:
+                try:
+                    problem_score = course_grade.problem_scores[block_location]
+                except KeyError:
+                    earned_possible_values.append([u'Not Available', u'Not Available'])
+                else:
+                    if problem_score.first_attempted:
+                        earned_possible_values.append([problem_score.earned, problem_score.possible])
+                    else:
+                        earned_possible_values.append([u'Not Attempted', problem_score.possible])
+
+            rows.append(
+                student_fields + [enrollment_status, course_grade.percent] + _flatten(earned_possible_values))
+        return rows, error_rows
+
+    @classmethod
+    def generate_rows(cls, grouped_users, context):
+        for users in grouped_users:
+            users = [u for u in users if u is not None]
+            yield cls.calculate_rows(users,
+                                     context["course"],
+                                     context["course_id"],
+                                     context["header_row"],
+                                     context["error_rows"],
+                                     context["rows"],
+                                     context["graded_scorable_blocks"],
+                                     context["task_progress"])
 
 
 class ProblemResponses(object):
