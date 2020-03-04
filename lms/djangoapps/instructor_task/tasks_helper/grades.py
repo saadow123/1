@@ -573,7 +573,6 @@ class ProblemGradeReport(object):
         `course_id`.
         """
         context.update_status(u'Starting grades')
-        import pdb; pdb.set_trace();
         course = get_course_by_id(context.course_id)
         header_row = OrderedDict([('id', 'Student ID'), ('email', 'Email'), ('username', 'Username')])
         graded_scorable_blocks = cls._graded_scorable_blocks_to_header(course)
