@@ -8,12 +8,12 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('schedules', '0013_historicalschedule'),
+        ('schedules', '0014_auto_20200304_2116'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='historicalschedule',
+            model_name='schedule',
             name='start',
             field=models.DateTimeField(db_index=True, default=None, help_text='Date this schedule went into effect', null=True),
         ),
