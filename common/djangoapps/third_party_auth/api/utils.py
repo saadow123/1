@@ -5,14 +5,18 @@ Shareable utilities for third party auth api functions
 from social_django.models import UserSocialAuth
 
 
-def get_user_social_auth_queryset_by_provider(provider):
+def filter_user_social_auth_queryset_by_provider(query_set, provider):
     """
-    Create a queryset filtering by the given TPA provider
+    Filter a query set by the given TPA provider
 
     Params:
+        query_set: QuerySet[UserSocialAuth]
         provider: common.djangoapps.third_party_auth.models.ProviderConfig
+    Returns:
+        QuerySet[UserSocialAuth]
     """
-    query_set = UserSocialAuth.objects.select_related('user').filter(provider=provider.backend_name)
+    query_set = query_set.filter(provider=provider.backend_name)
+
 
     # build our query filters
     # When using multi-IdP backend, we only retrieve the ones that are for current IdP.

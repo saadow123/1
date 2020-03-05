@@ -26,7 +26,7 @@ from third_party_auth import pipeline
 from third_party_auth.api import serializers
 from third_party_auth.api.permissions import TPA_PERMISSIONS
 from third_party_auth.provider import Registry
-from common.djangoapps.third_party_auth.api.utils import get_user_social_auth_queryset_by_provider
+from common.djangoapps.third_party_auth.api.utils import filter_user_social_auth_queryset_by_provider
 
 
 class ProviderBaseThrottle(throttling.UserRateThrottle):
@@ -349,7 +349,10 @@ class UserMappingView(ListAPIView):
         if not self.provider:
             raise Http404
 
-        query_set = get_user_social_auth_queryset_by_provider(self.provider)
+        query_set = filter_user_social_auth_queryset_by_provider(
+            UserSocialAuth.objects.select_related('user'),
+            self.provider,
+        )
         query = Q()
 
         usernames = self.request.query_params.getlist('username', None)

@@ -10,7 +10,9 @@ verification record.
 
 from django.core.management.base import BaseCommand, CommandError
 
-from common.djangoapps.third_party_auth.api.utils import get_user_social_auth_queryset_by_provider
+from social_django.models import UserSocialAuth
+
+from common.djangoapps.third_party_auth.api.utils import filter_user_social_auth_queryset_by_provider
 from lms.djangoapps.verify_student.models import SSOVerification
 from third_party_auth.provider import Registry
 
@@ -44,13 +46,16 @@ class Command(BaseCommand):
         except ValueError as e:
             raise CommandError('provider slug {slug} does not exist'.format(slug='provider_slug'))
 
-        query_set = get_user_social_auth_queryset_by_provider(provider)
+        query_set = UserSocialAuth.objects.select_related('user__profile')
+        query_set = filter_user_social_auth_queryset_by_provider(query_set, provider)
         for user_social_auth in query_set:
             if not user_social_auth.user.ssoverification_set.exists():
-                SSOVerification.objects.create(
+                verification = SSOVerification.objects.create(
                     user=user_social_auth.user,
                     status="approved",
                     name=user_social_auth.user.profile.name,
                     identity_provider_type=provider.full_class_name,
                     identity_provider_slug=provider.slug,
                 )
+                # Send a signal so users who have already passed their courses receive credit
+                verification.send_approval_signal(provider.slug)
