@@ -249,7 +249,6 @@ class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
 
     # Define the relationships between SAPSF record fields and Open edX logistration fields.
     default_field_mapping = {
-        'username': '',
         'firstName': ['username', 'first_name'],
         'lastName': 'last_name',
         'defaultFullName': 'fullname',
@@ -501,9 +500,7 @@ class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
         client = self.get_bizx_odata_api_client(user_id=user_id)
         if not client:
             return basic_details
-        transaction_data = {
-            'token_data': client.token_data
-        }
+
         try:
             response = client.get(
                 endpoint_url,
@@ -521,14 +518,9 @@ class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
             }
             self.log_bizx_api_exception(transaction_data, err)
             return basic_details
-        registration_fields = self.get_registration_fields(response)
-        # This statement is here for debugging purposes and should be removed when ENT-1500 is resolved.
-        if user_id != registration_fields.get('username'):
-            log.info(u'loggedinuser_id %s is different from BizX username %s',
-                     user_id,
-                     registration_fields.get('username'))
 
-        return registration_fields
+        log.info(u'[THIRD_PARTY_AUTH] BizX Odata response for user [%s] %s', user_id, response)
+        return self.get_registration_fields(response)
 
 
 def get_saml_idp_choices():

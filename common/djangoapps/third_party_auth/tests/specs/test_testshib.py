@@ -426,7 +426,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
         # Mock the call to the SAP SuccessFactors OData user endpoint
         ODATA_USER_URL = (
             'http://api.successfactors.com/odata/v2/User(userId=\'myself\')'
-            '?$select=username,firstName,lastName,defaultFullName,email'
+            '?$select=firstName,lastName,defaultFullName,email'
         )
 
         def user_callback(request, _uri, headers):
@@ -525,7 +525,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
         # Mock the call to the SAP SuccessFactors OData user endpoint
         ODATA_USER_URL = (
             'http://api.successfactors.com/odata/v2/User(userId=\'myself\')'
-            '?$select=username,firstName,country,lastName,defaultFullName,email'
+            '?$select=firstName,country,lastName,defaultFullName,email'
         )
 
         def user_callback(request, _uri, headers):
