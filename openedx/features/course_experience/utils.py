@@ -217,4 +217,5 @@ def get_resume_block(block):
         resume_block = get_resume_block(child)
         if resume_block:
             return resume_block
+    print('Resume block is: {}'.format(block))
     return block
