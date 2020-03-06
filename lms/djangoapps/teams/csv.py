@@ -107,6 +107,7 @@ class TeamMembershipImportManager(object):
         self.max_errors = 0
         self.existing_course_team_memberships = {}
         self.existing_course_teams = {}
+        self.team_name_to_proposed_membership = {}
         self.number_of_learners_assigned = 0
 
     @property
@@ -276,14 +277,21 @@ class TeamMembershipImportManager(object):
         user = row['user']
         for teamset_id in self.teamset_ids:
             team_name = row[teamset_id]
+            initial_membership_count = 0
             if not team_name:
                 continue
             try:
                 # checks for a team inside a specific team set. This way team names can be duplicated across
                 # teamsets
                 team = self.existing_course_teams[(team_name, teamset_id)]
+                initial_membership_count = team.users.count()
+                if (user.id, team.topic_id) in self.existing_course_team_memberships:
+                    error_message = 'User {0} is already on a team in teamset {1}.'.format(
+                        user.username, team.topic_id
+                    )
+                    if self.add_error_and_check_if_max_exceeded(error_message):
+                        return False
             except KeyError:
-                # if a team doesn't exists, the validation doesn't apply to it.
                 all_teamset_user_ids = self.user_ids_by_teamset_id[teamset_id]
                 error_message = 'User {0} is already on a team in teamset {1}.'.format(
                     user.username, teamset_id
@@ -292,18 +300,17 @@ class TeamMembershipImportManager(object):
                     return False
                 else:
                     self.user_ids_by_teamset_id[teamset_id].add(user.id)
-                    continue
+                    #continue
             max_team_size = self.course.teams_configuration.default_max_team_size
-            if max_team_size is not None and team.users.count() >= max_team_size:
-                if self.add_error_and_check_if_max_exceeded('Team ' + team.team_id + ' is full.'):
+            key = '{}.{}'.format(teamset_id, team_name)
+            if key not in self.team_name_to_proposed_membership:
+                self.team_name_to_proposed_membership[key] = initial_membership_count + 1
+            else:
+                self.team_name_to_proposed_membership[key] += 1
+            if max_team_size is not None and self.team_name_to_proposed_membership[key] >= max_team_size:
+                if self.add_error_and_check_if_max_exceeded('Team ' + team_name + ' is full.'):
                     return False
 
-            if (user.id, team.topic_id) in self.existing_course_team_memberships:
-                error_message = 'User {0} is already on a team in teamset {1}.'.format(
-                    user.username, team.topic_id
-                )
-                if self.add_error_and_check_if_max_exceeded(error_message):
-                    return False
         return True
 
     def add_error_and_check_if_max_exceeded(self, error_message):
