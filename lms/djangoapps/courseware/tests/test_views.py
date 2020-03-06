@@ -3303,9 +3303,17 @@ class MFERedirectTests(BaseViewsTestCase):
             assert self.client.get(lms_url).url == mfe_url
 
     def test_staff_no_redirect(self):
-        # global staff will never be redirected
         lms_url, mfe_url = self._get_urls()
 
+        # course staff will not redirect
+        course_staff = UserFactory.create(is_staff=True)
+        self.client.login(username=course_staff.username, password='test')
+
+        assert self.client.get(lms_url).status_code == 200
+        with override_waffle_flag(REDIRECT_TO_COURSEWARE_MICROFRONTEND, True):
+            assert self.client.get(lms_url).status_code == 200
+
+        # global staff will never be redirected
         self._create_global_staff_user()
         assert self.client.get(lms_url).status_code == 200
 
