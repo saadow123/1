@@ -42,5 +42,9 @@ urlpatterns = [
         name="feature_based_enrollments"
     ),
     url(r'link_program_enrollments/?$', LinkProgramEnrollmentSupportView.as_view(), name='link_program_enrollments'),
-    url(r'program_enrollments_inspector/?$', ProgramEnrollmentsInspectorView.as_view(), name='program_enrollments_inspector')
+    url(
+        r'program_enrollments_inspector/?$',
+        ProgramEnrollmentsInspectorView.as_view(),
+        name='program_enrollments_inspector'
+    )
 ]

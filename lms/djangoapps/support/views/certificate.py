@@ -5,7 +5,7 @@ Certificate tool in the student support app.
 
 from django.utils.decorators import method_decorator
 from django.views.generic import View
-from six.moves.urllib.parse import quote_plus, unquote  # pylint: disable=import-error
+from six.moves.urllib.parse import quote_plus, unquote
 
 from edxmako.shortcuts import render_to_response
 from support.decorators import require_support_permission
